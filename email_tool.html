@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Email Workspace</title>
+    <style>
+        :root { --primary: #4361ee; --bg-color: #f8f9fa; }
+        body.theme-leaders { --primary: #2ecc71; }
+        
+        body { font-family: 'Segoe UI', sans-serif; background-color: var(--bg-color); max-width: 900px; margin: 0 auto; padding: 30px; color: #333; }
+        .app-container { background: white; padding: 40px; border-radius: 16px; box-shadow: 0 4px 20px rgba(0,0,0,0.04); border-top: 6px solid var(--primary); }
+        
+        h2 { color: #1f2937; border-bottom: 2px solid #eee; padding-bottom: 15px; display: flex; justify-content: space-between; }
+        .brand-badge { background: var(--primary); color: white; padding: 5px 12px; border-radius: 20px; font-size: 12px; text-transform: uppercase; }
+
+        .tabs { display: flex; gap: 20px; margin-bottom: 30px; border-bottom: 1px solid #eee; }
+        .tab-btn { padding: 15px 0; border: none; background: none; font-weight: 600; color: #6b7280; cursor: pointer; border-bottom: 3px solid transparent; }
+        .tab-btn.active { color: var(--primary); border-bottom-color: var(--primary); }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+
+        .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 15px; }
+        label { display: block; font-weight: 600; font-size: 13px; margin-bottom: 8px; margin-top: 15px; }
+        input, textarea { width: 100%; padding: 12px; border: 1px solid #e5e7eb; border-radius: 8px; box-sizing: border-box; font-size: 14px; }
+        input:focus, textarea:focus { border-color: var(--primary); outline: none; }
+
+        .btn-primary { background-color: var(--primary); color: white; width: 100%; padding: 14px; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; margin-top: 25px; }
+        
+        /* VSCODE-STYLE LOGS */
+        .log-container { margin-top: 40px; border-top: 1px solid #eee; padding-top: 20px; }
+        .log-header { 
+            font-weight: bold; color: #1e293b; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center;
+            font-size: 14px; padding: 8px 12px; background: #f1f5f9; border-radius: 6px 6px 0 0;
+        }
+        .console { 
+            background: #1e1e1e; color: #d4d4d4; padding: 16px; border-radius: 0 0 6px 6px; 
+            height: 200px; overflow-y: auto; font-family: 'Consolas', monospace; font-size: 13px; 
+            line-height: 1.6; border: 1px solid #333;
+        }
+        .console::-webkit-scrollbar { width: 10px; }
+        .console::-webkit-scrollbar-track { background: #252526; }
+        .console::-webkit-scrollbar-thumb { background: #3e3e42; border-radius: 5px; }
+
+        .log-entry { padding: 4px 0; display: flex; align-items: flex-start; border-left: 2px solid transparent; padding-left: 10px; margin-bottom: 2px; }
+        .log-time { color: #858585; margin-right: 12px; font-size: 12px; min-width: 75px; flex-shrink: 0; }
+        .log-icon { margin-right: 8px; font-size: 14px; }
+        .log-msg { flex: 1; word-break: break-word; }
+        
+        .log-entry.success { border-left-color: #4ec9b0; }
+        .log-entry.success .log-icon, .log-entry.success .log-msg { color: #4ec9b0; }
+        .log-entry.error { border-left-color: #f48771; }
+        .log-entry.error .log-icon, .log-entry.error .log-msg { color: #f48771; }
+        .log-entry.warning { border-left-color: #dcdcaa; }
+        .log-entry.warning .log-icon, .log-entry.warning .log-msg { color: #dcdcaa; }
+        .log-entry.info { border-left-color: #569cd6; }
+        .log-entry.info .log-icon { color: #569cd6; }
+        
+        .clear-btn { background: transparent; border: 1px solid #cbd5e1; color: #64748b; padding: 4px 12px; border-radius: 4px; cursor: pointer; }
+    </style>
+</head>
+<body>
+
+<div class="app-container">
+    <h2><span id="app-title">Workspace</span> <span class="brand-badge" id="brand-badge">...</span></h2>
+    
+    <div class="tabs">
+        <button class="tab-btn active" onclick="setTab('bulk')">Bulk Send</button>
+        <button class="tab-btn" onclick="setTab('merge')">Mail Merge</button>
+    </div>
+
+    <div id="bulk" class="tab-content active">
+        <div class="form-grid">
+            <div><label>Recipients</label><input type="text" id="recipients" placeholder="a@b.com, c@d.com"></div>
+            <div><label>Reply-To</label><input type="email" id="reply_to"></div>
+        </div>
+        <label>Subject</label><input type="text" id="subject">
+        <label>Body</label><textarea id="email_body" rows="8"></textarea>
+        <button class="btn-primary" onclick="sendEmail()">🚀 Send Campaign</button>
+    </div>
+
+    <div id="merge" class="tab-content">
+        <div class="form-grid">
+            <div><label>Upload CSV</label><input type="file" id="merge_file"></div>
+            <div><label>Reply-To</label><input type="email" id="merge_reply_to"></div>
+        </div>
+        <label>Subject Template</label><input type="text" id="merge_subject">
+        <label>Body Template</label><textarea id="merge_body" rows="8"></textarea>
+        <button class="btn-primary" onclick="alert('Merge not implemented')">🚀 Start Merge</button>
+    </div>
+
+    <div class="log-container">
+        <div class="log-header">
+            <span>📟 Live Logs</span>
+            <button class="clear-btn" onclick="clearLogs()">Clear</button>
+        </div>
+        <div class="console" id="console"></div>
+    </div>
+</div>
+
+<script>
+    const params = new URLSearchParams(window.location.search);
+    const brand = params.get('brand') || 'Talrn';
+    
+    if (brand === 'Leadersfirst') document.body.classList.add('theme-leaders');
+    document.getElementById('app-title').innerText = brand + ' Workspace';
+    document.getElementById('brand-badge').innerText = brand;
+
+    function setTab(id) {
+        document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+        document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+        document.getElementById(id).classList.add('active');
+        event.target.classList.add('active');
+    }
+
+    async function sendEmail() {
+        const recipients = document.getElementById('recipients').value;
+        if (!recipients) return alert("Enter recipients");
+        
+        await fetch('/send-email', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                recipients: recipients,
+                reply_to: document.getElementById('reply_to').value,
+                subject: document.getElementById('subject').value,
+                email_body: document.getElementById('email_body').value,
+                is_html: true,
+                brand: brand
+            })
+        });
+    }
+
+    const consoleDiv = document.getElementById('console');
+    const iconMap = { 'success': '✓', 'error': '✗', 'warning': '⚠', 'info': '●' };
+
+    function clearLogs() { consoleDiv.innerHTML = ''; }
+
+    setInterval(async () => {
+        try {
+            const res = await fetch('/get-new-logs');
+            const logs = await res.json();
+            const brandLogs = logs.filter(l => l.brand === brand || l.brand === 'System');
+            
+            consoleDiv.innerHTML = brandLogs.slice(-15).map(log => `
+                <div class="log-entry ${log.type}">
+                    <span class="log-time">[${log.time}]</span>
+                    <span class="log-icon">${iconMap[log.type] || '•'}</span>
+                    <span class="log-msg">${log.msg}</span>
+                </div>
+            `).join('');
+            consoleDiv.scrollTop = consoleDiv.scrollHeight;
+        } catch(e) {}
+    }, 1000);
+</script>
+</body>
+</html>

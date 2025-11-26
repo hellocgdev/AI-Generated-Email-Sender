@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Email Operations Hub</title>
+    <style>
+        body { 
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background-color: #f3f4f6; margin: 0; display: flex; justify-content: center; align-items: center; height: 100vh; 
+        }
+        .dashboard { 
+            background: white; padding: 60px; border-radius: 20px; box-shadow: 0 20px 40px rgba(0,0,0,0.08); text-align: center; max-width: 400px; width: 100%; 
+        }
+        h1 { color: #111827; font-size: 26px; margin-bottom: 10px; }
+        p { color: #6b7280; margin-bottom: 40px; }
+        
+        .card {
+            display: flex; align-items: center; padding: 20px; margin-bottom: 15px;
+            background: white; border: 1px solid #e5e7eb; border-radius: 12px;
+            text-decoration: none; transition: all 0.2s; color: #374151;
+            cursor: pointer; position: relative; overflow: hidden;
+        }
+        .card:hover { transform: translateY(-3px); box-shadow: 0 10px 20px rgba(0,0,0,0.05); border-color: transparent; }
+        
+        .icon { 
+            width: 45px; height: 45px; border-radius: 10px; display: flex; align-items: center; justify-content: center; 
+            font-size: 20px; color: white; margin-right: 15px; flex-shrink: 0;
+        }
+        .talrn-icon { background: linear-gradient(135deg, #4361ee, #304ffe); }
+        .leaders-icon { background: linear-gradient(135deg, #2ecc71, #27ae60); }
+        
+        .info { text-align: left; }
+        .title { font-weight: 700; font-size: 16px; display: block; }
+        .desc { font-size: 13px; color: #9ca3af; }
+
+        .status-dot { width: 8px; height: 8px; background: #10b981; border-radius: 50%; position: absolute; top: 15px; right: 15px; }
+    </style>
+</head>
+<body>
+    <div class="dashboard">
+        <h1>🚀 Email Ops Center</h1>
+        <p>Select a workspace to manage campaigns.</p>
+
+        <a href="/tool?brand=talrn" target="_blank" class="card">
+            <div class="icon talrn-icon">⚡</div>
+            <div class="info">
+                <span class="title">Talrn Workspace</span>
+                <span class="desc">Recruitment & Sales</span>
+            </div>
+            <div class="status-dot" title="Active"></div>
+        </a>
+
+        <a href="/tool?brand=leadersfirst" target="_blank" class="card">
+            <div class="icon leaders-icon">🌿</div>
+            <div class="info">
+                <span class="title">Leadersfirst Workspace</span>
+                <span class="desc">Marketing & Outreach</span>
+            </div>
+            <div class="status-dot" title="Active"></div>
+        </a>
+    </div>
+</body>
+</html>
