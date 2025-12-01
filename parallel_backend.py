@@ -17,7 +17,7 @@ TALRN_CONFIG = {
     "SERVER": "b.trytalrn.com", "PORT": 465,
     "USER": "hire@b.trytalrn.com", "PASS": "fMVl36h1g}KqAfR2",
     "NAME": "Talrn", 
-    "LOGO": "Talrn logo.png",
+    "LOGO": "Talrn_logo.png",
     "CID": "talrn_logo",
     "LIMIT": 150, "WINDOW": 3600
 }
@@ -26,7 +26,7 @@ LEADERS_CONFIG = {
     "SERVER": "t.tryleadersfirst.com", "PORT": 465,
     "USER": "reach@t.tryleadersfirst.com", "PASS": "k2fLLmU3[.+?B1Hh",
     "NAME": "Leadersfirst", 
-    "LOGO": "leaderslogo.png", 
+    "LOGO": "Talrn_logo.png", 
     "CID": "leaders_logo",
     "LIMIT": 150, "WINDOW": 3600
 }
@@ -35,15 +35,21 @@ app = Flask(__name__)
 CORS(app)
 logging.basicConfig(level=logging.INFO)
 
-# Global State
+# --- GLOBAL STATE ---
+# Moved trackers here so the /stats route can access them
 talrn_queue = []
 leaders_queue = []
+t_times = [] # Rate limit tracker for Talrn
+l_times = [] # Rate limit tracker for Leaders
 recent_logs = [] 
+
+# Locks for thread safety
 queue_lock = threading.Lock()
 log_lock = threading.Lock()
 running = True
 
-def get_path(f): return os.path.join(os.path.dirname(os.path.abspath(__file__)), f)
+def get_path(f): 
+    return os.path.join(os.path.dirname(os.path.abspath(__file__)), f)
 
 def add_log(msg, type="info", brand="System"):
     timestamp = time.strftime("%H:%M:%S")
@@ -55,6 +61,7 @@ def add_log(msg, type="info", brand="System"):
 
 def check_rate_limit(sent_times, limit, window):
     now = time.time()
+    # Remove timestamps older than the window
     while sent_times and sent_times[0] < (now - window):
         sent_times.pop(0)
     return len(sent_times) < limit
@@ -63,54 +70,64 @@ def process_email(task, config, tracker):
     subject_preview = task['subject'][:20] + "..." if len(task['subject']) > 20 else task['subject']
     
     try:
+        # Rate Limit Check
         if not check_rate_limit(tracker, config['LIMIT'], config['WINDOW']):
             add_log(f"Rate limit hit ({config['LIMIT']}/hr). Pausing...", "warning", config['NAME'])
             return False
 
+        # Email Construction
         msg = MIMEMultipart('related')
         msg['Subject'] = task['subject']
         msg['From'] = formataddr((config['NAME'], config['USER']))
         msg['To'] = task['recipient']
-        if task.get('reply_to'): msg.add_header('Reply-To', task['reply_to'])
+        if task.get('reply_to'): 
+            msg.add_header('Reply-To', task['reply_to'])
 
         alt = MIMEMultipart('alternative')
         msg.attach(alt)
         
-        # HTML Body processing
+        # --- HTML Body Processing (FIXED) ---
+        # We unconditionally replace BOTH potential logo placeholders with the CURRENT brand's CID.
+        # This prevents errors if a user copies a Leaders template into Talrn or vice versa.
         body_html = task['body']
-        if config['NAME'] == 'Leadersfirst':
-             body_html = body_html.replace('cid:talrn_logo', f'cid:{config["CID"]}')
-        elif config['NAME'] == 'Talrn':
-             body_html = body_html.replace('cid:leaders_logo', f'cid:{config["CID"]}')
+        current_cid = config["CID"]
+        
+        # Replace common placeholders
+        body_html = body_html.replace('cid:talrn_logo', f'cid:{current_cid}')
+        body_html = body_html.replace('cid:leaders_logo', f'cid:{current_cid}')
         
         alt.attach(MIMEText(body_html, 'html' if task['is_html'] else 'plain', 'utf-8'))
 
-        # Logo Attachment
+        # --- Logo Attachment ---
         logo_path = get_path(config['LOGO'])
         if os.path.exists(logo_path):
             try:
                 with open(logo_path, 'rb') as f:
                     img = MIMEImage(f.read())
-                    img.add_header('Content-ID', f"<{config['CID']}>")
+                    # The Content-ID must match what is in the HTML (brackets are required by standards)
+                    img.add_header('Content-ID', f"<{current_cid}>")
                     img.add_header('Content-Disposition', 'inline', filename=config['LOGO'])
                     msg.attach(img)
             except Exception as e:
-                add_log(f"Logo error: {e}", "warning", config['NAME'])
+                add_log(f"Logo attachment error: {e}", "warning", config['NAME'])
         else:
-            add_log(f"Logo file missing: {config['LOGO']}", "warning", config['NAME'])
+            add_log(f"Logo file not found: {config['LOGO']}", "warning", config['NAME'])
 
+        # --- Sending ---
         ctx = ssl.create_default_context()
         with smtplib.SMTP_SSL(config['SERVER'], config['PORT'], context=ctx) as s:
             s.login(config['USER'], config['PASS'])
             s.send_message(msg)
         
+        # Track success
         tracker.append(time.time())
-        # UPDATED LOG MESSAGE: Now includes Subject
         add_log(f"Sent \"{subject_preview}\" to {task['recipient']}", "success", config['NAME'])
         return True
 
     except Exception as e:
-        add_log(f"Failed \"{subject_preview}\" to {task['recipient']}: {e}", "error", config['NAME'])
+        add_log(f"Failed sending to {task['recipient']}: {e}", "error", config['NAME'])
+        # We return True here to discard the failed task so it doesn't block the queue forever.
+        # In a more advanced system, you might implement a retry limit.
         return True
 
 def worker(queue, config, tracker):
@@ -124,8 +141,10 @@ def worker(queue, config, tracker):
             if process_email(task, config, tracker):
                 with queue_lock: queue.pop(0)
             else:
+                # Rate limit hit, wait a bit before checking again
                 time.sleep(10)
         else:
+            # Empty queue, idle wait
             time.sleep(1)
 
 # --- ROUTES ---
@@ -143,35 +162,73 @@ def get_logs():
 @app.route('/send-email', methods=['POST'])
 def send():
     d = request.json
-    brand = d.get('brand', 'Talrn')
-    recipients = d.get('recipients', '').split(',')
-    count = 0
     
+    # --- Validation (FIXED) ---
+    if not d or 'recipients' not in d or 'subject' not in d:
+        return jsonify({"status": "Error", "msg": "Missing recipients or subject"}), 400
+
+    brand = d.get('brand', 'Talrn')
+    # Clean recipient list (remove empty strings/spaces)
+    recipients = [r.strip() for r in d.get('recipients', '').split(',') if r.strip()]
+    
+    if not recipients:
+        return jsonify({"status": "Error", "msg": "No valid recipients found"}), 400
+
+    count = 0
     with queue_lock:
         for r in recipients:
-            if r.strip():
-                task = {
-                    'recipient': r.strip(), 'subject': d.get('subject'),
-                    'body': d.get('email_body'), 'is_html': d.get('is_html'),
-                    'reply_to': d.get('reply_to'), 'brand': brand
-                }
-                if str(brand).lower() == 'leadersfirst': 
-                    leaders_queue.append(task)
-                else: 
-                    talrn_queue.append(task)
-                count += 1
+            task = {
+                'recipient': r, 
+                'subject': d.get('subject'),
+                'body': d.get('email_body'), 
+                'is_html': d.get('is_html', True),
+                'reply_to': d.get('reply_to'), 
+                'brand': brand
+            }
+            
+            if str(brand).lower() == 'leadersfirst': 
+                leaders_queue.append(task)
+            else: 
+                talrn_queue.append(task)
+            count += 1
     
     add_log(f"Queued {count} emails", "info", brand)
-    return jsonify({"status": "Queued", "msg": f"Queued {count}"})
+    return jsonify({"status": "Queued", "msg": f"Queued {count} emails"})
 
 @app.route('/stats', methods=['GET'])
-def stats(): return jsonify([])
+def stats():
+    # --- Statistics Logic (FIXED) ---
+    now = time.time()
+    
+    # Calculate emails sent in the sliding window (Last Hour)
+    t_sent = len([t for t in t_times if t > (now - TALRN_CONFIG['WINDOW'])])
+    l_sent = len([t for t in l_times if t > (now - LEADERS_CONFIG['WINDOW'])])
+
+    with queue_lock:
+        t_queue = len(talrn_queue)
+        l_queue = len(leaders_queue)
+
+    return jsonify({
+        "status": "Running",
+        "talrn": {
+            "queue": t_queue,
+            "sent_last_hour": t_sent,
+            "limit": TALRN_CONFIG['LIMIT']
+        },
+        "leadersfirst": {
+            "queue": l_queue,
+            "sent_last_hour": l_sent,
+            "limit": LEADERS_CONFIG['LIMIT']
+        }
+    })
 
 if __name__ == '__main__':
-    t_times, l_times = [], []
+    # Start Workers
     threading.Thread(target=worker, args=(talrn_queue, TALRN_CONFIG, t_times), daemon=True).start()
     threading.Thread(target=worker, args=(leaders_queue, LEADERS_CONFIG, l_times), daemon=True).start()
     
     add_log("System started. Workers ready.", "info", "System")
     print("🚀 Parallel Server running on http://localhost:5000")
+    
+    # Run Flask
     app.run(port=5000, threaded=True)
