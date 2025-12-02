@@ -222,13 +222,22 @@ def stats():
         }
     })
 
-if __name__ == '__main__':
-    # Start Workers
-    threading.Thread(target=worker, args=(talrn_queue, TALRN_CONFIG, t_times), daemon=True).start()
-    threading.Thread(target=worker, args=(leaders_queue, LEADERS_CONFIG, l_times), daemon=True).start()
+# if __name__ == '__main__':
+#     # Start Workers
+#     threading.Thread(target=worker, args=(talrn_queue, TALRN_CONFIG, t_times), daemon=True).start()
+#     threading.Thread(target=worker, args=(leaders_queue, LEADERS_CONFIG, l_times), daemon=True).start()
     
-    add_log("System started. Workers ready.", "info", "System")
-    print("🚀 Parallel Server running on http://localhost:5000")
+#     add_log("System started. Workers ready.", "info", "System")
+#     print("🚀 Parallel Server running on http://localhost:5000")
     
-    # Run Flask
-    app.run(port=5000, threaded=True)
+#     # Run Flask
+#     app.run(port=5000, threaded=True)
+
+# render deployment code changes
+# --- after defining worker(), before routes or at bottom of file ---
+
+# Start Workers (run both under Flask dev server and Gunicorn)
+threading.Thread(target=worker, args=(talrn_queue, TALRN_CONFIG, t_times), daemon=True).start()
+threading.Thread(target=worker, args=(leaders_queue, LEADERS_CONFIG, l_times), daemon=True).start()
+
+add_log("System started. Workers ready.", "info", "System")
